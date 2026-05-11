@@ -19,26 +19,46 @@ function fetchHtml(url) {
         }
       },
       (res) => {
-        if (res.statusCode !== 200) {
-          reject(new Error(`IMDb responded ${res.statusCode}`));
-          res.resume();
-          return;
-        }
         let data = '';
         res.on('data', (chunk) => (data += chunk));
-        res.on('end', () => resolve(data));
+        res.on('end', () => {
+          resolve({
+            statusCode: res.statusCode,
+            body: data
+          });
+        });
       }
     );
     req.on('error', reject);
   });
 }
 
+function loadExisting() {
+  try {
+    if (fs.existsSync(OUTPUT)) {
+      return JSON.parse(fs.readFileSync(OUTPUT, 'utf8'));
+    }
+  } catch (err) {
+    console.error('Could not read existing list.json:', err.message);
+  }
+  return { generated_at: new Date().toISOString(), items: [] };
+}
+
 (async () => {
   try {
     console.log('Fetching IMDb list page...');
-    const html = await fetchHtml(URL);
+    const response = await fetchHtml(URL);
 
-    // Extract tt-IDs plus nearby titles in a very simple way
+    if (response.statusCode !== 200) {
+      console.warn(`IMDb responded ${response.statusCode}, keeping existing list.json`);
+      const existing = loadExisting();
+      fs.writeFileSync(OUTPUT, JSON.stringify(existing, null, 2), 'utf8');
+      console.log(`Preserved existing list with ${existing.items.length} items`);
+      process.exit(0);
+    }
+
+    const html = response.body;
+
     const idRegex = /data-tconst="(tt\d+)"/g;
     const titleRegex = /<img[^>]+alt="([^"]+)"[^>]*data-tconst="(tt\d+)"/g;
 
@@ -71,6 +91,10 @@ function fetchHtml(url) {
     console.log(`Wrote ${items.length} items to ${OUTPUT}`);
   } catch (err) {
     console.error('update-list.js failed:', err.message);
-    process.exit(1);
+
+    const existing = loadExisting();
+    fs.writeFileSync(OUTPUT, JSON.stringify(existing, null, 2), 'utf8');
+    console.log(`Fallback wrote existing list with ${existing.items.length} items`);
+    process.exit(0);
   }
 })();
