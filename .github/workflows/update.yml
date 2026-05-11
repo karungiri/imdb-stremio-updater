@@ -1,4 +1,4 @@
-name: Update IMDb list and push to VPS
+name: Update and Deploy IMDb List
 
 on:
   schedule:
@@ -18,14 +18,8 @@ jobs:
         with:
           node-version: '22'
 
-      - name: Install dependencies
-        run: npm install
-
-      - name: Install Playwright browser
-        run: npx playwright install chromium --with-deps
-
       - name: Run updater
-        run: npm run update
+        run: node update-list.js
 
       - name: Show summary
         run: |
