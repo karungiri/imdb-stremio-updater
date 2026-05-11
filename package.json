@@ -1,7 +1,10 @@
 {
   "name": "imdb-stremio-updater",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "scripts": {
     "update": "node update-list.js"
+  },
+  "dependencies": {
+    "playwright": "^1.52.0"
   }
 }

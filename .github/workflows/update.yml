@@ -2,8 +2,8 @@ name: Update IMDb list and push to VPS
 
 on:
   schedule:
-    - cron: '0 3 * * *'  # every day at 03:00 UTC
-  workflow_dispatch:      # allow manual run
+    - cron: '0 3 * * *'
+  workflow_dispatch:
 
 jobs:
   update-and-deploy:
@@ -16,18 +16,21 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
 
       - name: Install dependencies
         run: npm install
 
-      - name: Run updater (fetch IMDb and build list.json)
+      - name: Install Playwright browser
+        run: npx playwright install chromium --with-deps
+
+      - name: Run updater
         run: npm run update
 
       - name: Show summary
         run: |
           echo "Generated list.json:"
-          head -n 20 list.json || true
+          head -n 40 list.json || true
 
       - name: Setup SSH agent
         uses: webfactory/ssh-agent@v0.9.0

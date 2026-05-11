@@ -1,37 +1,11 @@
 #!/usr/bin/env node
 
 const fs = require('fs');
-const https = require('https');
+const { chromium } = require('playwright');
 
 const IMDB_LIST_ID = 'ls592973749';
 const URL = `https://www.imdb.com/list/${IMDB_LIST_ID}/?sort=release_date,asc`;
 const OUTPUT = 'list.json';
-
-function fetchHtml(url) {
-  return new Promise((resolve, reject) => {
-    const req = https.get(
-      url,
-      {
-        headers: {
-          'User-Agent':
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36',
-          'Accept-Language': 'en-US,en;q=0.9'
-        }
-      },
-      (res) => {
-        let data = '';
-        res.on('data', (chunk) => (data += chunk));
-        res.on('end', () => {
-          resolve({
-            statusCode: res.statusCode,
-            body: data
-          });
-        });
-      }
-    );
-    req.on('error', reject);
-  });
-}
 
 function loadExisting() {
   try {
@@ -45,19 +19,20 @@ function loadExisting() {
 }
 
 (async () => {
+  let browser;
   try {
-    console.log('Fetching IMDb list page...');
-    const response = await fetchHtml(URL);
+    console.log('Launching browser...');
+    browser = await chromium.launch({ headless: true });
+    const page = await browser.newPage({
+      userAgent:
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36'
+    });
 
-    if (response.statusCode !== 200) {
-      console.warn(`IMDb responded ${response.statusCode}, keeping existing list.json`);
-      const existing = loadExisting();
-      fs.writeFileSync(OUTPUT, JSON.stringify(existing, null, 2), 'utf8');
-      console.log(`Preserved existing list with ${existing.items.length} items`);
-      process.exit(0);
-    }
+    console.log('Opening IMDb list...');
+    await page.goto(URL, { waitUntil: 'domcontentloaded', timeout: 60000 });
+    await page.waitForTimeout(5000);
 
-    const html = response.body;
+    const html = await page.content();
 
     const idRegex = /data-tconst="(tt\d+)"/g;
     const titleRegex = /<img[^>]+alt="([^"]+)"[^>]*data-tconst="(tt\d+)"/g;
@@ -89,12 +64,17 @@ function loadExisting() {
 
     fs.writeFileSync(OUTPUT, JSON.stringify(payload, null, 2), 'utf8');
     console.log(`Wrote ${items.length} items to ${OUTPUT}`);
+
+    if (items.length === 0) {
+      console.warn('No IMDb items found; keeping file but output is empty');
+    }
   } catch (err) {
     console.error('update-list.js failed:', err.message);
-
     const existing = loadExisting();
     fs.writeFileSync(OUTPUT, JSON.stringify(existing, null, 2), 'utf8');
     console.log(`Fallback wrote existing list with ${existing.items.length} items`);
     process.exit(0);
+  } finally {
+    if (browser) await browser.close();
   }
 })();
